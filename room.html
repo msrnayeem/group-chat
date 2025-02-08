@@ -6,7 +6,6 @@
     <title>Group Chat Room</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
-
     <style>
         body {
             cursor: default;
@@ -16,15 +15,13 @@
 
 <body>
     <div class="container">
-        <div class="container">
-            <h2 class="mt-3"><a href="/">Group Chat</a> - Room <span id="roomIdDisplay"></span> <button
-                    class="btn btn-info btn-sm ml-3" id="copyLink">Copy Link</button>
-            </h2>
-            <button class="btn btn-danger btn-sm ml-3" id="userCount" disabled>User Count: 0</button>
-            <button class="btn btn-danger btn-sm ml-3" id="cancelRoom">Cancel Room</button>
-            <div class="alert alert-success d-none mt-2" id="copySuccess">Link copied!</div>
-            <div class="alert alert-info mt-2" id="userJoinMessage" style="display: none;"></div>
-        </div>
+        <h2 class="mt-3"><a href="/">Group Chat</a> - Room NO: <span id="roomIdDisplay"></span>
+            <button class="btn btn-info btn-sm ml-3" id="copyLink">Copy Link</button>
+        </h2>
+        <button class="btn btn-danger btn-sm ml-3" id="userCount" disabled>User Count: 0</button>
+        <button class="btn btn-danger btn-sm ml-3 d-none" id="cancelRoom">Cancel Room</button>
+        <div class="alert alert-success d-none mt-2" id="copySuccess">Link copied!</div>
+        <div class="alert alert-info mt-2" id="userJoinMessage" style="display: none;"></div>
 
         <div class="card mt-3">
             <div class="card-body" style="height: 400px; overflow-y: scroll;">
@@ -43,14 +40,55 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>
-
         let socket = io();
         let roomId = window.location.pathname.split("/").pop();
         $('#roomIdDisplay').text(roomId);
 
-        let username = sessionStorage.getItem('username') || "Guest";
-        socket.emit('joinRoom', { roomId, username });
+        // Ask for username if not stored in sessionStorage
+        if (!sessionStorage.getItem('username')) {
+            Swal.fire({
+                title: "Enter your username",
+                input: "text",
+                inputPlaceholder: "Username",
+                showCancelButton: false,
+                confirmButtonText: "Submit",
+                allowOutsideClick: false,
+                preConfirm: (username) => {
+                    return new Promise((resolve) => {
+                        if (!username || username.trim() === "") {
+                            Swal.showValidationMessage("Please enter a username");
+                            resolve(false);
+                            return;
+                        }
 
+                        socket.emit('checkUsername', { roomId, username: username.trim() });
+
+                        socket.once('usernameAvailable', () => {
+                            sessionStorage.setItem('username', username.trim());
+                            resolve(username.trim());
+                        });
+
+                        socket.once('usernameTaken', () => {
+                            Swal.showValidationMessage("Username already taken! Choose another.");
+                            resolve(false);
+                        });
+                    });
+                }
+            }).then((result) => {
+                if (!result.isConfirmed || !result.value) {
+                    window.location.href = "/"; // Redirect if user cancels or enters nothing
+                } else {
+                    joinRoom(result.value);
+                }
+            });
+        } else {
+            joinRoom(sessionStorage.getItem('username'));
+        }
+
+        // Function to join the room
+        function joinRoom(username) {
+            socket.emit('joinRoom', { roomId, username });
+        }
 
         $('#send').click(function () {
             let message = $('#message').val();
@@ -67,11 +105,14 @@
             if (file) {
                 let reader = new FileReader();
                 reader.onload = function (event) {
-                    socket.emit('chat', { roomId, username, message, fileName: file.name, fileType: file.type, fileData: event.target.result.split(',')[1], dateTime });
+                    socket.emit('chat', {
+                        roomId, username: sessionStorage.getItem('username'), message,
+                        fileName: file.name, fileType: file.type, fileData: event.target.result.split(',')[1], dateTime
+                    });
                 };
                 reader.readAsDataURL(file);
             } else {
-                socket.emit('chat', { roomId, username, message, dateTime });
+                socket.emit('chat', { roomId, username: sessionStorage.getItem('username'), message, dateTime });
             }
 
             let fileHTML = file ? `<a href="#" class="btn btn-sm btn-info mt-1">attachment - ${file.name}</a>` : "";
@@ -82,8 +123,6 @@
                     <small class="text-muted d-block mt-1">${dateTime}</small>
                 </li>
             `);
-
-            $(".card-body").scrollTop(0);
         });
 
         socket.on('chat', function (data) {
@@ -96,8 +135,6 @@
                     <small class="text-muted d-block mt-1">${data.dateTime}</small>
                 </li>
             `);
-
-            $(".card-body").scrollTop(0);
         });
 
         $('#copyLink').click(function () {
@@ -110,7 +147,6 @@
             });
         });
 
-
         $('#cancelRoom').click(function () {
             Swal.fire({
                 title: "Are you sure?",
@@ -121,19 +157,17 @@
             }).then((result) => {
                 if (result.isConfirmed) {
                     socket.emit('cancelRoom', roomId);
-                    window.location.href = '/'; // Redirect immediately
+                    window.location.href = '/';
                 }
             });
         });
 
-
-
         socket.on('roomCanceled', function () {
             Swal.fire({
                 title: "Room Canceled",
-                text: "The room has been canceled by the creator. Redirecting...",
+                text: "The room has been canceled. Redirecting...",
                 icon: "info",
-                timer: 5000, // Auto close in 3 seconds
+                timer: 5000,
                 timerProgressBar: true,
                 showConfirmButton: false
             }).then(() => {
@@ -141,9 +175,6 @@
             });
         });
 
-
-
-        // Listen for user joining notification and update the user count
         socket.on('userJoined', function (data) {
             $('#userJoinMessage').text(data.message).show();
             $('#userCount').text(`User Count: ${data.userCount}`);
@@ -152,7 +183,6 @@
             }, 2000);
         });
 
-        // Listen for user joining notification and update the user count
         socket.on('userLeft', function (data) {
             $('#userJoinMessage').text(data.message).show();
             $('#userCount').text(`User Count: ${data.userCount}`);
@@ -161,6 +191,10 @@
             }, 2000);
         });
 
+        // ✅ Show "Cancel Room" button only for the creator
+        socket.on('roomCreator', () => {
+            $('#cancelRoom').removeClass('d-none'); // ✅ Show only for creator
+        });
     </script>
 </body>
 

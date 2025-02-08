@@ -20,44 +20,50 @@ app.get('/room/:roomId', (req, res) => {
 const rooms = {}; // Track active rooms and their timers
 
 io.on('connection', (socket) => {
-    console.log('A user connected');
 
     socket.on('joinRoom', ({ roomId, username }) => {
         if (!rooms[roomId]) {
-            rooms[roomId] = {
-                userCount: 0,
-                timer: null
-            };
+            rooms[roomId] = { userCount: 0, timer: null, users: [], creator: username };
         }
 
+
+
+        rooms[roomId].users.push(username);
+        socket.username = username;
+        socket.roomId = roomId;
         socket.join(roomId);
         rooms[roomId].userCount++;
 
-        // Notify all users in the room about the new user joining
+        if (rooms[roomId].creator === username) {
+            socket.emit('roomCreator'); // ✅ Only the creator gets this event
+        }
+
         io.in(roomId).emit('userJoined', {
             message: `${username} has joined the room.`,
             userCount: rooms[roomId].userCount
         });
 
         console.log(`${username} joined room: ${roomId}`);
+    });
 
-        if (rooms[roomId] && rooms[roomId].timer) {
-            clearTimeout(rooms[roomId].timer);
+    socket.on('checkUsername', ({ roomId, username }) => {
+        if (!rooms[roomId]) {
+            rooms[roomId] = { userCount: 0, timer: null, users: [] };
+        }
+
+        if (rooms[roomId].users.includes(username)) {
+            socket.emit('usernameTaken');
+        } else {
+            socket.emit('usernameAvailable');
         }
     });
 
+
     socket.on('cancelRoom', (roomId) => {
-        console.log(`Canceling room: ${roomId}`);
-
-        if (rooms[roomId]) {
-            // Notify all other users in the room
-            socket.to(roomId).emit('roomCanceled');
-
-            // Force users to leave the room before deleting it
+        if (rooms[roomId] && rooms[roomId].creator === socket.username) {
+            io.in(roomId).emit('roomCanceled');
             io.in(roomId).socketsLeave(roomId);
-
-            console.log(`Room ${roomId} is canceled.`);
-            delete rooms[roomId]; // Remove the room from memory
+            delete rooms[roomId];
         }
     });
 
@@ -68,28 +74,24 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnecting', () => {
-        socket.rooms.forEach((roomId) => {
-            if (roomId !== socket.id && rooms[roomId]) {  // Ensure room exists before modifying
-                if (rooms[roomId].userCount > 0) {
-                    rooms[roomId].userCount--;
-                }
+        if (socket.roomId && rooms[socket.roomId]) {
+            rooms[socket.roomId].users = rooms[socket.roomId].users.filter(user => user !== socket.username);
+            rooms[socket.roomId].userCount--;
 
-                // Emit updated user count only if the room still exists
-                io.in(roomId).emit('userLeft', {
-                    userCount: rooms[roomId]?.userCount || 0,
-                    message: `${socket.id} has left the room`
-                });
+            io.in(socket.roomId).emit('userLeft', {
+                userCount: rooms[socket.roomId]?.userCount || 0,
+                message: `${socket.username} has left the room.`
+            });
 
-                if (rooms[roomId].userCount <= 0) {
-                    rooms[roomId].timer = setTimeout(() => {
-                        if (rooms[roomId]) {
-                            delete rooms[roomId];
-                            console.log(`Room ${roomId} removed due to inactivity`);
-                        }
-                    }, 5 * 60 * 1000); // 5 minutes
-                }
+            if (rooms[socket.roomId].userCount <= 0) {
+                rooms[socket.roomId].timer = setTimeout(() => {
+                    if (rooms[socket.roomId]) {
+                        delete rooms[socket.roomId];
+                        console.log(`Room ${socket.roomId} removed due to inactivity`);
+                    }
+                }, 5 * 60 * 1000);
             }
-        });
+        }
     });
 
 

@@ -50,30 +50,47 @@
         $('#createRoom, #joinRoom').click(function () {
             let action = $(this).attr('id');
 
-            // Check for empty room ID before prompting for username
             if (action === 'joinRoom') {
                 let roomId = $('#roomIdInput').val().trim();
                 if (!roomId) {
                     Swal.fire("Error", "Please enter a valid Room ID before joining.", "error");
-                    return; // Stop further execution
+                    return;
                 }
             }
 
-            // SweetAlert2 for username input
             Swal.fire({
                 title: "Enter your username",
                 input: "text",
                 inputPlaceholder: "Username",
                 showCancelButton: true,
                 confirmButtonText: "Submit",
+                allowOutsideClick: false,
                 preConfirm: (username) => {
-                    if (!username || username.trim() === "") {
-                        Swal.showValidationMessage("Please enter a username");
-                    }
-                    return username.trim();
+                    return new Promise((resolve) => {
+                        if (!username || username.trim() === "") {
+                            Swal.showValidationMessage("Please enter a username");
+                            resolve(false);  // Prevents further execution
+                            return;
+                        }
+
+                        let socket = io();
+                        let roomId = action === 'createRoom' ? Math.random().toString(36).substr(2, 8) : $('#roomIdInput').val().trim();
+
+                        socket.emit('checkUsername', { roomId, username: username.trim() });
+
+                        // Listen for username response
+                        socket.once('usernameAvailable', () => {
+                            resolve(username.trim());  // ✅ Allow SweetAlert2 to proceed
+                        });
+
+                        socket.once('usernameTaken', () => {
+                            Swal.showValidationMessage("Username already taken! Choose another.");
+                            resolve(false); // ✅ Prevents SweetAlert2 from closing
+                        });
+                    });
                 }
             }).then((result) => {
-                if (result.isConfirmed) {
+                if (result.isConfirmed && result.value) { // Ensure username is valid
                     let username = result.value;
                     sessionStorage.setItem('username', username);
 
