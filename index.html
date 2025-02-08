@@ -5,68 +5,93 @@
     <meta charset="UTF-8">
     <title>Group Chat - Rooms</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Include Bootstrap Icons for Better UI -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+
 </head>
 
 <body>
-    <div class="container text-center mt-5">
-        <h1>Welcome to Group Chat</h1>
-        <button class="btn btn-success mt-3" id="createRoom">Create a Room</button>
-        <div class="mt-3">
-            <input type="text" id="roomIdInput" class="form-control" placeholder="Enter Room ID">
-            <button class="btn btn-primary mt-2" id="joinRoom">Join Room</button>
-        </div>
-    </div>
 
-    <div class="modal" id="usernameModal">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Enter your username</h5>
-                </div>
-                <div class="modal-body">
-                    <input type="text" id="usernameInput" class="form-control" placeholder="Username">
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-primary" id="submitUsername">Submit</button>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-12 text-center">
+                <h1 class="fw-bold text-primary">Welcome to Group Chat</h1>
+                <p class="text-muted">Create or join a room to start chatting</p>
+            </div>
+
+            <div class="col-md-5">
+                <div class="card shadow-lg border-0 rounded-4">
+                    <div class="card-body text-center">
+                        <button class="btn btn-success w-100 py-2 fw-semibold shadow-sm" id="createRoom">
+                            <i class="bi bi-plus-lg"></i> Create a Room
+                        </button>
+                        <hr class="my-5">
+                        <input type="text" id="roomIdInput" class="form-control text-center rounded-pill shadow-sm"
+                            placeholder="Enter Room ID">
+                        <button class="btn btn-primary w-100 mt-3 py-2 fw-semibold shadow-sm" id="joinRoom">
+                            <i class="bi bi-box-arrow-in-right"></i> Join Room
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
+
+
+    <!-- Include SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
     <script src="/socket.io/socket.io.js"></script>
+
     <script>
-        let socket = io();
 
         $('#createRoom, #joinRoom').click(function () {
             let action = $(this).attr('id');
-            $('#usernameModal').modal('show');
 
-            $('#submitUsername').off('click').on('click', function () {
-                let username = $('#usernameInput').val().trim();
-                if (!username) {
-                    alert("Please enter a username");
-                    return;
+            // Check for empty room ID before prompting for username
+            if (action === 'joinRoom') {
+                let roomId = $('#roomIdInput').val().trim();
+                if (!roomId) {
+                    Swal.fire("Error", "Please enter a valid Room ID before joining.", "error");
+                    return; // Stop further execution
                 }
-                sessionStorage.setItem('username', username);
-                $('#usernameModal').modal('hide');
-                if (action === 'createRoom') {
-                    let roomId = Math.random().toString(36).substr(2, 8);
-                    socket.emit('createRoom', roomId);
-                    window.location.href = "/room/" + roomId;
-                } else {
-                    let roomId = $('#roomIdInput').val().trim();
-                    if (roomId) {
-                        socket.emit('joinRoom', roomId);
+            }
+
+            // SweetAlert2 for username input
+            Swal.fire({
+                title: "Enter your username",
+                input: "text",
+                inputPlaceholder: "Username",
+                showCancelButton: true,
+                confirmButtonText: "Submit",
+                preConfirm: (username) => {
+                    if (!username || username.trim() === "") {
+                        Swal.showValidationMessage("Please enter a username");
+                    }
+                    return username.trim();
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    let username = result.value;
+                    sessionStorage.setItem('username', username);
+
+                    let socket = io();
+
+                    if (action === 'createRoom') {
+                        let roomId = Math.random().toString(36).substr(2, 8);
+                        socket.emit('createRoom', roomId);
                         window.location.href = "/room/" + roomId;
                     } else {
-                        alert("Enter a valid Room ID");
+                        let roomId = $('#roomIdInput').val().trim();
+                        socket.emit('joinRoom', roomId);
+                        window.location.href = "/room/" + roomId;
                     }
                 }
             });
         });
+
     </script>
 </body>
 
