@@ -23,19 +23,35 @@ io.on('connection', (socket) => {
     console.log('A user connected');
 
     socket.on('joinRoom', (roomId) => {
+        if (!rooms[roomId]) {
+            rooms[roomId] = {
+                userCount: 0,
+                timer: null
+            };
+        }
+
         socket.join(roomId);
+        rooms[roomId].userCount++;
+
+        // Notify all users in the room about the new user joining
+        io.in(roomId).emit('userJoined', {
+            message: `A new user has joined the room.`,
+            userCount: rooms[roomId].userCount
+        });
+
         console.log(`User joined room: ${roomId}`);
 
-        // Clear room removal timer if users rejoin
         if (rooms[roomId] && rooms[roomId].timer) {
             clearTimeout(rooms[roomId].timer);
         }
+    });
 
-        // Track user count in room
-        rooms[roomId] = {
-            userCount: (rooms[roomId]?.userCount || 0) + 1,
-            timer: null
-        };
+    socket.on('cancelRoom', (roomId) => {
+        if (rooms[roomId]) {
+            io.in(roomId).emit('roomCanceled', 'The room has been canceled by the creator. Redirecting to the homepage...');
+            console.log(`Room ${roomId} is canceled by the creator.`);
+            delete rooms[roomId];
+        }
     });
 
     socket.on('chat', (data) => {
@@ -43,12 +59,16 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnecting', () => {
-        // Remove user from all joined rooms
         socket.rooms.forEach((roomId) => {
-            if (roomId !== socket.id) { // Exclude the user's own room ID
+            if (roomId !== socket.id) {
                 rooms[roomId].userCount--;
 
-                // If room is empty, set a timer to remove it
+                // Emit the updated user count and notify other users of the disconnection
+                io.in(roomId).emit('userLeft', {
+                    userCount: rooms[roomId].userCount,
+                    message: `${socket.id} has left the room`
+                });
+
                 if (rooms[roomId].userCount <= 0) {
                     rooms[roomId].timer = setTimeout(() => {
                         delete rooms[roomId];
@@ -58,6 +78,8 @@ io.on('connection', (socket) => {
             }
         });
     });
+
+
 
     socket.on('disconnect', () => {
         console.log('User disconnected');

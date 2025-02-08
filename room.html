@@ -12,13 +12,17 @@
 <body>
     <div class="container">
         <div class="container">
-            <h2 class="mt-3">Group Chat - Room <span id="roomIdDisplay"></span></h2>
-            <button class="btn btn-secondary btn-sm" id="copyLink">Copy Room Link</button>
+            <h2 class="mt-3">Group Chat - Room <span id="roomIdDisplay"></span> <button class="btn btn-info btn-sm ml-3"
+                    id="copyLink">Copy Link</button>
+            </h2>
+            <button class="btn btn-danger btn-sm ml-3" id="userCount" disabled>User Count: 0</button>
+            <button class="btn btn-danger btn-sm ml-3" id="cancelRoom">Cancel Room</button>
             <div class="alert alert-success d-none mt-2" id="copySuccess">Link copied!</div>
+            <div class="alert alert-info mt-2" id="userJoinMessage" style="display: none;"></div>
         </div>
 
         <div class="card mt-3">
-            <div class="card-body" style="height: 500px; overflow-y: scroll;">
+            <div class="card-body" style="height: 400px; overflow-y: scroll;">
                 <ul class="list-group" id="messages-list"></ul>
             </div>
             <div class="card-footer">
@@ -30,7 +34,6 @@
     </div>
 
     <script>
-
         let socket = io();
         let roomId = window.location.pathname.split("/").pop();
         $('#roomIdDisplay').text(roomId);
@@ -67,39 +70,71 @@
             }
 
             let fileHTML = file ? `<a href="#" class="btn btn-sm btn-info mt-1">attachment - ${file.name}</a>` : "";
-            $("#messages-list").append(`
+            $("#messages-list").prepend(`
                 <li class="list-group-item">
                     <div><h3>You - ${message}</h3></div>
                     ${fileHTML}
                     <small class="text-muted d-block mt-1">${dateTime}</small>
                 </li>
             `);
+
+            $(".card-body").scrollTop(0);
         });
 
         socket.on('chat', function (data) {
             let fileHTML = data.fileName ? `<a href="data:${data.fileType};base64,${data.fileData}" download="${data.fileName}" class="btn btn-sm btn-info mt-1">Download ${data.fileName}</a>` : "";
 
-            $("#messages-list").append(`
+            $("#messages-list").prepend(`
                 <li class="list-group-item">
                     <div><h3>Other's - ${data.message}</h3></div>
                     ${fileHTML}
                     <small class="text-muted d-block mt-1">${data.dateTime}</small>
                 </li>
             `);
-        });
 
-        let roomIdCopied = window.location.pathname.split("/").pop();
-        $('#roomIdDisplay').text(roomId);
+            $(".card-body").scrollTop(0);
+        });
 
         $('#copyLink').click(function () {
             let roomLink = window.location.href;
             navigator.clipboard.writeText(roomLink).then(() => {
-                $('#copySuccess').removeClass('d-none'); // Show success message
-                setTimeout(() => $('#copySuccess').addClass('d-none'), 3000); // Hide after 2s
+                $('#copySuccess').removeClass('d-none');
+                setTimeout(() => $('#copySuccess').addClass('d-none'), 3000);
             }).catch(err => {
                 console.error("Failed to copy: ", err);
             });
         });
+
+        $('#cancelRoom').click(function () {
+            if (confirm("Are you sure you want to cancel this room?")) {
+                socket.emit('cancelRoom', roomId);
+            }
+        });
+
+        // Listen for room cancellation from server
+        socket.on('roomCanceled', function (message) {
+            alert(message);
+            window.location.href = '/';
+        });
+
+        // Listen for user joining notification and update the user count
+        socket.on('userJoined', function (data) {
+            $('#userJoinMessage').text(data.message).show();
+            $('#userCount').text(`User Count: ${data.userCount}`);
+            setTimeout(() => {
+                $('#userJoinMessage').hide();
+            }, 2000);
+        });
+
+        // Listen for user joining notification and update the user count
+        socket.on('userLeft', function (data) {
+            $('#userJoinMessage').text(data.message).show();
+            $('#userCount').text(`User Count: ${data.userCount}`);
+            setTimeout(() => {
+                $('#userJoinMessage').hide();
+            }, 2000);
+        });
+
     </script>
 </body>
 
