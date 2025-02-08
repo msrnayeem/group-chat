@@ -34,11 +34,14 @@
     </div>
 
     <script>
+
         let socket = io();
         let roomId = window.location.pathname.split("/").pop();
         $('#roomIdDisplay').text(roomId);
 
-        socket.emit('joinRoom', roomId);
+        let username = sessionStorage.getItem('username') || "Guest";
+        socket.emit('joinRoom', { roomId, username });
+
 
         $('#send').click(function () {
             let message = $('#message').val();
@@ -55,24 +58,17 @@
             if (file) {
                 let reader = new FileReader();
                 reader.onload = function (event) {
-                    socket.emit('chat', {
-                        roomId: roomId,
-                        message: message,
-                        fileName: file.name,
-                        fileType: file.type,
-                        fileData: event.target.result.split(',')[1],
-                        dateTime: dateTime
-                    });
+                    socket.emit('chat', { roomId, username, message, fileName: file.name, fileType: file.type, fileData: event.target.result.split(',')[1], dateTime });
                 };
                 reader.readAsDataURL(file);
             } else {
-                socket.emit('chat', { roomId: roomId, message: message, dateTime: dateTime });
+                socket.emit('chat', { roomId, username, message, dateTime });
             }
 
             let fileHTML = file ? `<a href="#" class="btn btn-sm btn-info mt-1">attachment - ${file.name}</a>` : "";
             $("#messages-list").prepend(`
                 <li class="list-group-item">
-                    <div><h3>You - ${message}</h3></div>
+                    <div><h3>You: ${message}</h3></div>
                     ${fileHTML}
                     <small class="text-muted d-block mt-1">${dateTime}</small>
                 </li>
@@ -86,7 +82,7 @@
 
             $("#messages-list").prepend(`
                 <li class="list-group-item">
-                    <div><h3>Other's - ${data.message}</h3></div>
+                    <div><h3>${data.username}: ${data.message}</h3></div>
                     ${fileHTML}
                     <small class="text-muted d-block mt-1">${data.dateTime}</small>
                 </li>

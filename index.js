@@ -22,7 +22,7 @@ const rooms = {}; // Track active rooms and their timers
 io.on('connection', (socket) => {
     console.log('A user connected');
 
-    socket.on('joinRoom', (roomId) => {
+    socket.on('joinRoom', ({roomId, username}) => {
         if (!rooms[roomId]) {
             rooms[roomId] = {
                 userCount: 0,
@@ -35,18 +35,18 @@ io.on('connection', (socket) => {
 
         // Notify all users in the room about the new user joining
         io.in(roomId).emit('userJoined', {
-            message: `A new user has joined the room.`,
+            message: `${username} has joined the room.`,
             userCount: rooms[roomId].userCount
         });
 
-        console.log(`User joined room: ${roomId}`);
+        console.log(`${username} joined room: ${roomId}`);
 
         if (rooms[roomId] && rooms[roomId].timer) {
             clearTimeout(rooms[roomId].timer);
         }
     });
 
-    socket.on('cancelRoom', (roomId) => {
+    socket.on('cancelRoom', ({roomId, username}) => {
         if (rooms[roomId]) {
             io.in(roomId).emit('roomCanceled', 'The room has been canceled by the creator. Redirecting to the homepage...');
             console.log(`Room ${roomId} is canceled by the creator.`);
